@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Моя Доставка — Главная</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f6fa; margin: 0; padding: 20px; color: #333; }
+        /* Левая часть теперь занимает 3 части, а правая корзина — 1 часть (75% на 25%) */
+        .container { max-width: 1000px; margin: 40px auto; display: grid; grid-template-columns: 3fr 1fr; gap: 20px; }
+        .box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); height: fit-content; }
+        h2 { border-bottom: 2px solid #eef2f5; padding-bottom: 12px; margin-top: 0; color: #1a1a1a; display: flex; align-items: center; gap: 10px; font-size: 18px; }
+        .item-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+        
+        /* Стили для широкой витрины */
+        .product-card { display: flex; justify-content: space-between; align-items: center; padding: 15px; border: 1px solid #eef2f5; border-radius: 8px; background: #fafbfc; }
+        
+        /* Стили для супер-компактной корзины */
+        .cart-item { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #eef2f5; border-radius: 8px; background: #fafbfc; }
+        .cart-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        
+        .info h4 { margin: 0 0 5px 0; font-size: 14px; line-height: 1.3; }
+        .info p { margin: 0; color: #7e8b9b; font-size: 12px; }
+        .price { font-weight: bold; color: #2ecc71; font-size: 14px; }
+        .btn { border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: background 0.2s; font-size: 13px; }
+        .btn-add { background-color: #2ecc71; color: white; }
+        .btn-add:hover { background-color: #27ae60; }
+        .btn-remove { background-color: transparent; color: #e74c3c; padding: 4px; font-size: 14px; border: none; cursor: pointer; }
+        .btn-remove:hover { transform: scale(1.1); }
+        .summary { margin-top: 25px; text-align: right; font-size: 15px; font-weight: bold; border-top: 2px solid #eef2f5; padding-top: 15px; }
+        
+        /* Кнопка оформления заказа */
+        .checkout-btn { width: 100%; background-color: #3498db; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: background 0.2s; }
+        .checkout-btn:hover { background-color: #2980b9; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Левая колонка: Витрина товаров из SQL -->
+    <div class="box">
+        <h2>🍏 Витрина товаров</h2>
+        <div id="products-container" class="item-list">Загрузка витрины...</div>
+    </div>
+
+    <!-- Правая колонка: Интерактивная корзина -->
+    <div class="box">
+        <h2>🛒 Корзина — Моя Доставка</h2>
+        <div id="cart-container" class="item-list">Загрузка корзины...</div>
+        <div class="summary" id="cart-summary">Итого: 0.00 BYN</div>
+        <!-- Добавили кнопку оформления заказа -->
+        <button class="checkout-btn" onclick="checkoutOrder()">Оформить заказ</button>
+    </div>
+</div>
+
+<script>
+    // Функция загрузки витрины товаров (Вызывает SELECT * FROM product)
+    function loadProducts() {
+        fetch('/api/products')
+            .then(res => res.json())
+            .then(products => {
+                const container = document.getElementById('products-container');
+                container.innerHTML = products.map(p => `
+                    <div class="product-card">
+                        <div class="info">
+                            <h4>${p.name}</h4>
+                            <p class="price">${p.price.toFixed(2)} BYN</p>
+                        </div>
+                        <button class="btn btn-add" onclick="addToCart(${p.id})">+ В корзину</button>
+                    </div>
+                `).join('');
+            });
+    }
+
+    // Функция загрузки содержимого корзины (Вызывает SQL JOIN-запрос)
+    // Функция загрузки содержимого корзины (Вызывает SQL JOIN-запрос)
+    function loadCart() {
+        fetch('/api/cart')
+            .then(res => res.json())
+            .then(cartItems => {
+                const container = document.getElementById('cart-container');
+                const summary = document.getElementById('cart-summary');
+                
+                if (cartItems.length === 0) {
+                    container.innerHTML = '<p style="color: #7e8b9b;">Корзина пуста</p>';
+                    summary.innerHTML = 'Итого: 0.00 BYN';
+                    return;
+                }
+
+                let total = 0;
+                container.innerHTML = cartItems.map(item => {
+                    const itemTotal = item.price * item.quantity;
+                    total += itemTotal;
+                    return `
+                        <div class="cart-item">
+                            <div class="info">
+                                <h4>${item.name}</h4>
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 5px;">
+                                    <span style="color: #7e8b9b; font-size: 13px;">${item.price.toFixed(2)} BYN х </span>
+                                    <!-- Поле ввода количества, связанное с базой данных -->
+                                    <input type="number" value="${item.quantity}" min="0" style="width: 50px; padding: 3px; border: 1px solid #ccc; border-radius: 4px;" onchange="updateQuantity(${item.id}, this.value)">
+                                    <span style="color: #7e8b9b; font-size: 13px;"> шт.</span>
+                                </div>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span class="price">${itemTotal.toFixed(2)} BYN</span>
+                                <button class="btn btn-remove" onclick="removeFromCart(${item.id})">❌</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                summary.innerHTML = `Итого: ${total.toFixed(2)} BYN`;
+            });
+    }
+
+    // Новая функция: изменяет количество в базе данных (Вызывает SQL UPDATE)
+    function updateQuantity(productId, quantity) {
+        fetch('/api/cart/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId, quantity: parseInt(quantity) })
+        }).then(() => loadCart()); // Перезагружаем корзину, чтобы пересчитать суммы
+    }
+
+
+    // Функция добавления товара (Вызывает SQL INSERT)
+    function addToCart(productId) {
+        fetch('/api/cart/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId })
+        }).then(() => loadCart()); // Перезагружаем только корзину после добавления
+    }
+
+    // Функция удаления товара (Вызывает SQL DELETE)
+    function removeFromCart(productId) {
+        fetch('/api/cart/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId })
+        }).then(() => loadCart()); // Перезагружаем корзину после удаления
+    }
+
+    // Инициализация страницы при открытии
+    loadProducts();
+    loadCart();
+    
+    function checkoutOrder() {
+        alert('Заказ оформлен! Данные скоро отправятся в SQL таблицу заказов.');
+    }
+
+</script>
+</body>
+</html>
